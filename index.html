@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HBD HOYINZ - Retro Edition</title>
+    <!-- 引入像素字型 -->
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0a0a0a;
+            --primary-color: #00ff41; /* 螢光綠 */
+            --secondary-color: #003b00;
+            --accent-color: #ffb000; /* 琥珀色 */
+            --danger-color: #ff003c;
+            --panel-bg: rgba(0, 40, 0, 0.9);
+            --border-style: 4px solid var(--primary-color);
+            --font-main: 'Press Start 2P', 'Courier New', Courier, monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--primary-color);
+            font-family: var(--font-main);
+            font-size: 16px; /* 中文字調大兩號 */
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* 網格與掃描線背景 */
+        .crt-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), 
+                        linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 2px, 3px 100%;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        .grid-bg {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-image: linear-gradient(var(--secondary-color) 1px, transparent 1px),
+                              linear-gradient(90deg, var(--secondary-color) 1px, transparent 1px);
+            background-size: 40px 40px;
+            z-index: -1;
+            opacity: 0.3;
+        }
+
+        /* 遊戲容器 */
+        #game-container {
+            width: 95%;
+            max-width: 800px;
+            height: 95vh;
+            max-height: 650px;
+            border: var(--border-style);
+            background: var(--panel-bg);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.2);
+            overflow: hidden;
+        }
+
+        .screen {
+            display: none;
+            flex: 1;
+            padding: 15px;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            overflow: hidden;
+        }
+
+        .screen.active {
+            display: flex;
+        }
+
+        /* UI 元件 */
+        h1 { font-size: 22px; margin-bottom: 20px; text-shadow: 2px 2px var(--secondary-color); }
+        h2 { font-size: 16px; margin-bottom: 15px; color: var(--accent-color); }
+        p { line-height: 1.6; margin-bottom: 10px; font-size: 16px; }
+
+        .digit-font { font-size: 14px !important; }
+
+        .btn {
+            background: var(--secondary-color);
+            color: var(--primary-color);
+            border: 2px solid var(--primary-color);
+            padding: 12px 18px;
+            margin: 8px;
+            cursor: pointer;
+            font-family: var(--font-main);
+            font-size: 14px;
+            transition: all 0.2s;
+            text-transform: uppercase;
+        }
+
+        .btn:hover {
+            background: var(--primary-color);
+            color: var(--bg-color);
+            box-shadow: 0 0 10px var(--primary-color);
+        }
+
+        .btn:disabled { opacity: 0.3; cursor: not-allowed; border-color: #444; color: #444; }
+
+        .map-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-top: 20px; }
+
+        /* Stage 1 特定樣式 */
+        #magnifier-canvas-container { 
+            position: relative; 
+            width: 100%; 
+            height: 300px; 
+            background: #000; 
+            border: 2px solid var(--primary-color); 
+            overflow: hidden;
+            cursor: crosshair;
+        }
+        #mag-img-blur { width: 100%; height: 100%; object-fit: cover; filter: blur(20px) grayscale(1); opacity: 0.5; }
+        #mag-lens { 
+            position: absolute; 
+            width: 120px; height: 120px; 
+            border-radius: 50%; 
+            border: 3px solid var(--accent-color); 
+            pointer-events: none; 
+            background-repeat: no-repeat; 
+            display: none; 
+            z-index: 10; 
+            box-shadow: 0 0 15px rgba(255, 176, 0, 0.5);
+        }
+
+        /* Stage 2 & 4 特定樣式 */
+        #catch-game-area {
+            position: relative;
+            width: 100%;
+            height: 350px;
+            background: #050505;
+            border: 2px solid var(--primary-color);
+            overflow: hidden;
+        }
+        .falling-item {
+            position: absolute;
+            padding: 5px 10px;
+            border: 1px solid var(--primary-color);
+            background: var(--bg-color);
+            font-size: 14px;
+            white-space: nowrap;
+        }
+        #player-basket {
+            position: absolute;
+            bottom: 10px;
+            width: 80px;
+            height: 20px;
+            background: var(--accent-color);
+            border: 2px solid #fff;
+        }
+
+        #bubble-area {
+            position: relative;
+            width: 100%;
+            height: 420px;
+            background: #000;
+            overflow: hidden;
+            border: 2px solid var(--primary-color);
+            cursor: crosshair;
+        }
+        .bubble-node {
+            position: absolute;
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            border: 1px solid rgba(255,255,255,0.4);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .bubble-falling { z-index: 50; transition: transform 0.6s ease-in, top 0.6s ease-in, opacity 0.6s ease-in; pointer-events: none; }
+        
+        #cannon-container {
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 120px; height: 120px;
+            z-index: 200;
+            pointer-events: none;
+        }
+        #cannon-wrapper {
+            position: relative;
+            width: 100%; height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: transform 0.05s linear;
+        }
+        #cannon-svg {
+            fill: var(--accent-color);
+            filter: drop-shadow(0 0 5px rgba(255, 176, 0, 0.8));
+        }
+        #current-bubble-display {
+            position: absolute;
+            width: 32px; height: 32px;
+            border-radius: 50%;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            border: 2px solid #fff;
+            box-shadow: 0 0 10px var(--primary-color);
+            transform: translateY(-38px);
+            z-index: 10;
+        }
+        #next-bubble-preview {
+            position: absolute;
+            bottom: 15px; left: 15px;
+            width: 40px; height: 40px;
+            border: 2px dashed var(--accent-color);
+            border-radius: 50%;
+            background-size: cover;
+            background-position: center;
+        }
+        #next-label { position: absolute; bottom: 60px; left: 15px; font-size: 10px; color: var(--accent-color); }
+
+        /* 最終長文樣式修復 */
+        #final-text-area {
+            text-align: left;
+            width: 100%;
+            min-height: 250px; /* 稍微縮小以留出空間 */
+            max-height: 300px;
+            font-size: 13px; /* 稍微縮小字體以確保每頁都能塞進去 */
+            line-height: 1.8;
+            padding: 15px;
+            overflow-y: auto;
+            border: 1px solid var(--secondary-color);
+            background: rgba(0,0,0,0.5);
+            margin-bottom: 5px;
+        }
+        .pagination-controls {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            margin-bottom: 5px;
+        }
+        .bottom-action-bar {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            gap: 10px;
+        }
+
+        .chat-container { width: 100%; height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 10px; background: #000; border: 1px solid var(--secondary-color); }
+        .msg { max-width: 80%; padding: 8px 12px; border-radius: 4px; font-size: 14px; position: relative; line-height: 1.4; }
+        .msg-them { align-self: flex-start; background: var(--secondary-color); color: var(--primary-color); border-left: 4px solid var(--primary-color); }
+        .msg-me { align-self: flex-end; background: #333; color: #fff; border-right: 4px solid var(--accent-color); text-align: right; }
+        .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; margin-top: 15px; }
+
+        #msg-box { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85%; background: #000; border: 4px solid var(--accent-color); padding: 20px; z-index: 3000; display: none; text-align: center; }
+        .typing { white-space: pre-wrap; }
+
+    </style>
+</head>
+<body>
+
+<div class="crt-overlay"></div>
+<div class="grid-bg"></div>
+
+<div id="game-container">
+    <!-- 首頁 -->
+    <section id="screen-home" class="screen active">
+        <h1>HBD HOYINZ</h1>
+        <p>來自荷蘭馬斯垂克的祝福</p>
+        <button class="btn" onclick="Game.start()">開始遊戲</button>
+        <button class="btn" onclick="Game.reset()">重設進度</button>
+    </section>
+
+    <section id="screen-map" class="screen">
+        <h2>任務地圖</h2>
+        <div class="map-grid" id="map-levels"></div>
+        <button class="btn mt-20" onclick="Game.showScreen('home')">返回首頁</button>
+    </section>
+
+    <section id="screen-intro" class="screen">
+        <h2 id="intro-title"></h2>
+        <p id="intro-desc"></p>
+        <button class="btn mt-20" id="intro-start-btn">我準備好了</button>
+    </section>
+
+    <section id="screen-stage1" class="screen">
+        <div id="magnifier-canvas-container" onmousemove="Stage1.handleMove(event)" ontouchmove="Stage1.handleTouch(event)">
+            <img id="mag-img-blur" src="" alt="blur">
+            <div id="mag-lens"></div>
+        </div>
+        <div class="options-grid" id="stage1-options"></div>
+    </section>
+
+    <section id="screen-stage2" class="screen">
+        <div style="display: flex; justify-content: space-between; width: 100%; padding: 5px;">
+            <span class="digit-font">得分: <span id="s2-score">0</span> / <span id="s2-target">520</span></span>
+            <span class="digit-font">時間: <span id="s2-timer">45</span>s</span>
+        </div>
+        <div id="catch-game-area"><div id="player-basket"></div></div>
+    </section>
+
+    <section id="screen-stage3" class="screen">
+        <div class="chat-container" id="chat-box"></div>
+        <div class="options-grid" id="stage3-options"></div>
+    </section>
+
+    <section id="screen-stage4" class="screen">
+        <div id="bubble-area">
+            <div id="cannon-container">
+                <div id="cannon-wrapper">
+                    <svg id="cannon-svg" viewBox="0 0 100 100" width="100" height="100">
+                        <circle cx="32" cy="75" r="18" />
+                        <circle cx="68" cy="75" r="18" />
+                        <rect x="35" y="15" width="30" height="65" rx="15" />
+                    </svg>
+                    <div id="current-bubble-display"></div>
+                </div>
+            </div>
+            <div id="next-label">NEXT:</div>
+            <div id="next-bubble-preview"></div>
+        </div>
+        <p style="margin-top: 10px;">點擊發射，目標為清除所有泡泡。</p>
+    </section>
+
+    <section id="screen-clue" class="screen">
+        <h2>獲得線索卡</h2>
+        <div class="clue-card">
+            <h1 id="clue-expression" class="digit-font"></h1>
+            <p>(請用心算並記下答案)</p>
+        </div>
+        <button class="btn" onclick="Game.showScreen('map')">回到地圖</button>
+    </section>
+
+    <section id="screen-chest" class="screen">
+        <h2>最終密碼</h2>
+        <input type="text" id="final-pwd-input" placeholder="密碼" class="digit-font" style="background: #000; color: var(--accent-color); border: 2px solid var(--primary-color); padding: 10px; text-align: center; font-family: var(--font-main); width: 80%; margin-bottom: 20px;">
+        <button class="btn" onclick="Game.unlockChest()">解鎖</button>
+        <button class="btn" onclick="Game.showScreen('map')">返回</button>
+    </section>
+
+    <!-- 最終結尾畫面 -->
+    <section id="screen-final" class="screen">
+        <h1 style="color: var(--accent-color); font-size: 14px; margin-top: 50px; margin-bottom: 15px; width: 85%;">20220312是你進山服的第一次團聚，也是我們第一次見面的日子。</h1>
+        <div id="final-text-area" class="typing"></div>
+        <div class="pagination-controls">
+            <button class="btn" id="prev-page" style="flex: 1;" onclick="Game.finalPager.prev()">上一頁</button>
+            <span id="page-indicator" style="padding: 15px; font-size: 12px;" class="digit-font">1 / 4</span>
+            <button class="btn" id="next-page" style="flex: 1;" onclick="Game.finalPager.next()">下一頁</button>
+        </div>
+        <div class="bottom-action-bar">
+            <button class="btn" id="bgm-toggle" style="flex: 1;">閉嘴/唱歌</button>
+            <button class="btn" onclick="Game.showScreen('home')" style="flex: 1;">回到首頁</button>
+        </div>
+    </section>
+</div>
+
+<div id="msg-box">
+    <p id="msg-text"></p>
+    <button class="btn" onclick="UI.hideMsg()">確定</button>
+</div>
+
+<audio id="audio-bgm" loop></audio>
+
+<script>
+/**
+ * ==========================================
+ * 遊戲資料設定
+ * ==========================================
+ */
+const gameData = {
+    stages: ["我們一起去過哪裡", "李浩然喜歡什麼？", "我們的Line都在幹嘛？", "你敢不敢狂射"],
+    puzzleClues: [
+        { stage: 1, expression: "93 - 25 - 48", answer: "20" },
+        { stage: 2, expression: "39 + 84 + 97", answer: "220" },
+        { stage: 3, expression: "252 / 7 / 12", answer: "3" },
+        { stage: 4, expression: "2 * 4 * 1.5", answer: "12" }
+    ],
+    stage1: [
+        { image: "https://raw.githubusercontent.com/LIKE0626/Picture-for-Hoyinz-s-BD/392f760c66fced446f68d135293344637e152f00/Q1.jpg", answer: "宥廷家頂樓", options: ["我龍潭家", "宥廷家頂樓", "春浪阿嬤家", "花蓮家遊民宿"] },
+        { image: "https://raw.githubusercontent.com/LIKE0626/Picture-for-Hoyinz-s-BD/392f760c66fced446f68d135293344637e152f00/Q2.jpg", answer: "The Oxygen Beachfront Oasis", options: ["The Oxygen Beachfront Oasis", "The Forest by The Sky", "Cabbages & Condoms", "The sky gallery"] },
+        { image: "https://raw.githubusercontent.com/LIKE0626/Picture-for-Hoyinz-s-BD/392f760c66fced446f68d135293344637e152f00/Q3.jpg", answer: "KTV阿嬤家", options: ["長老家", "胡勳阿嬤家", "村長家", "KTV阿嬤家"] },
+        { image: "https://raw.githubusercontent.com/LIKE0626/Picture-for-Hoyinz-s-BD/392f760c66fced446f68d135293344637e152f00/Q4.jpg", answer: "雙溪國小", options: ["雙溪國小", "長溪國小", "雙連國小", "重熙國小"] },
+        { image: "https://raw.githubusercontent.com/LIKE0626/Picture-for-Hoyinz-s-BD/392f760c66fced446f68d135293344637e152f00/Q5.jpg", answer: "清境農場觀山牧區", options: ["清淨農場觀山牧區", "清淨農場小瑞士", "清淨農場青青草原", "清境農場觀山牧區"] }
+    ],
+    stage2: {
+        likedNames: ["寶劍", "光漢", "孝騰", "雞雞", "胸肌", "棉褲", "油條", "豆包", "青峰", "果然匯", "18cm"],
+        dislikedNames: ["諺倫", "啟源", "奶子", "蔬菜", "智評", "璋哥", "小雞雞", "畢設", "雙標", "子庭的Vlog"],
+        bombNames: ["芷菱", "允齊"],
+        specialWinName: "可婕",
+        scoreLiked: 20, scoreDisliked: -15, targetScore: 520, duration: 45, speed: 3
+    },
+    stage3: [
+        {
+            setupMsgs: [{ side: 'them', text: "XXX感覺也是gay，感覺他沒有激發我的做愛感" }, { side: 'me', text: "誰？" }],
+            correctAnswer: "車銀優", options: ["朴寶劍", "田柾國", "車銀優", "夫勝寬"]
+        },
+        {
+            setupMsgs: [{ side: 'them', text: "我又在性騷擾你的ChatGPT" }, { side: 'me', text: "？" }],
+            correctAnswer: "I need his dick....", options: ["I need his dick....", "Do you want to make love with me?", "I want to see your big dick", "I want to fuck my manager"]
+        },
+        {
+            setupMsgs: [{ side: 'them', text: "幹" }, { side: 'them', text: "安好食店員超帥" }, { side: 'them', text: "長得有點像XXX" }, { side: 'me', text: "誰？" }],
+            correctAnswer: "張孝騰", options: ["許光漢", "張孝騰", "杜哥", "林柏宏"]
+        }
+    ],
+    stage4: {
+        avatars: [
+            "https://raw.githubusercontent.com/LIKE0626/Picture-for-Hoyinz-s-BD/2e8b359084ca90ff289b17e0bc39c0d332c4be24/%E5%8A%89.jpg",
+            "https://raw.githubusercontent.com/LIKE0626/Picture-for-Hoyinz-s-BD/2e8b359084ca90ff289b17e0bc39c0d332c4be24/%E5%BC%B5.jpg",
+            "https://raw.githubusercontent.com/LIKE0626/Picture-for-Hoyinz-s-BD/2e8b359084ca90ff289b17e0bc39c0d332c4be24/%E6%B4%AA.jpg",
+            "https://raw.githubusercontent.com/LIKE0626/Picture-for-Hoyinz-s-BD/2e8b359084ca90ff289b17e0bc39c0d332c4be24/%E7%8E%8B.jpg",
+            "https://raw.githubusercontent.com/LIKE0626/Picture-for-Hoyinz-s-BD/2e8b359084ca90ff289b17e0bc39c0d332c4be24/%E8%8E%8A.jpg",
+            "https://raw.githubusercontent.com/LIKE0626/Picture-for-Hoyinz-s-BD/2e8b359084ca90ff289b17e0bc39c0d332c4be24/%E8%B3%B4.jpg",
+            "https://raw.githubusercontent.com/LIKE0626/Picture-for-Hoyinz-s-BD/2e8b359084ca90ff289b17e0bc39c0d332c4be24/%E9%99%B3.jpg"
+        ]
+    },
+    finalChest: {
+        password: "20220312",
+        // 更新為四頁排列
+        pages: [
+            `嗨！李浩然！
+今年沒辦法在現場幫你過生日，只好透過這個方式傳達我想對你說的話。
+
+這一年對我們來說可能都是充滿挑戰的一年：我忙著考GMAT、申請研究所、搬到了一個陌生地方生活、分手、嘗試在混亂與規律中更認識自己。你忙著做畢設、實習以及規劃你未來在台灣的一切，盡可能最佳化有限的時間與資源。跟前幾年我們的對話總是充斥著人性探討與各種天馬行空的假設性問題相比，現在討論更多的是投資、工作或是對畢業後生活的想像。`,
+            `回顧我們認識的這四年，我們好像變了很多又好像沒變。變的是我們不再時不時就窩在戀戀台大徹夜聊天，大把的揮霍時間、不再討論山服發生的人事物、也少了那些說走就走的旅行。
+
+沒變的是你依舊穩穩的佔據我生活與內心最重要的一部分。你是最願意了解我、最有智慧了解我的人，當我遭遇低潮與困惑時，你總能適時的為我剖析，在一個不會遠到無法理解，卻又不會近到陷入不理性情緒的距離提醒我、幫我我釐清問題。你也是最能看見我的好、對我最有信心的人，當我不斷懷疑自己上不上得了研究所、能不能找得到工作、未來會不會一團糟的時候，你總是堅定的肯定我、鼓勵我，讓我也開始相信真實的我與你眼中所認知到的我是同樣的好。`,
+            `而我也希望你能知道我眼中的你是什麼樣子的：聰明、智慧、有遠見、有韌性………你好像永遠能在困境之中找到破口，永遠能從中有所收穫與反思，一直吸收著生活中帶給你的不論是好的或是不好的各種經驗，成長成一個越來越強大、沒有盲點的人。
+
+你總說友誼就像君子之交，淡如水，我覺得我現在理解了一部分，畢竟在適當的距離才能看的更清楚，才能真的在對方需要的時候提供建設性的意見。但我同時也希望我們的友誼能是你的靠山、你的底氣，當你被現實壓的悶悶的、甚至是有點喘不過氣的時候，你仍能有一道通風口。我會變成一個更厲害的人，讓我愛的人在需要我的時候我能提供適時的幫助，我也想和你一起成為更厲害的人，不只是見證你的成功的一刻，而是陪你走過人生的一個個節點，一起扶持、一起成長。`,
+            `生日快樂啦！我愛你、也很想你，我們台灣見！
+
+2026.03.18 Like`
+        ],
+        bgm: "https://raw.githubusercontent.com/LIKE0626/Picture-for-Hoyinz-s-BD/b45c97717f5cfa8b718f87998852f6282fb71bfe/song.mp3"
+    }
+};
+
+/**
+ * ==========================================
+ * 通用系統
+ * ==========================================
+ */
+const UI = {
+    showMsg: (t, bt = "確定") => { 
+        document.getElementById('msg-text').innerText = t; 
+        const btn = document.querySelector('#msg-box .btn');
+        if(btn) btn.innerText = bt;
+        document.getElementById('msg-box').style.display='block'; 
+    },
+    hideMsg: () => { document.getElementById('msg-box').style.display='none'; }
+};
+
+const Game = {
+    unlockedStage: 1,
+    init: () => {
+        const s = localStorage.getItem('treasure_hunt_progress');
+        if(s) Game.unlockedStage = parseInt(s);
+        Game.renderMap();
+        document.getElementById('bgm-toggle').onclick = () => {
+            const a = document.getElementById('audio-bgm');
+            if(a.paused) a.play(); else a.pause();
+        };
+    },
+    start: () => Game.showScreen('map'),
+    reset: () => { localStorage.removeItem('treasure_hunt_progress'); Game.unlockedStage = 1; location.reload(); },
+    renderMap: () => {
+        const map = document.getElementById('map-levels'); map.innerHTML = '';
+        for(let i=1; i<=4; i++) {
+            const b = document.createElement('button'); b.className = 'btn';
+            b.innerHTML = `關卡 ${i}<br>${i > Game.unlockedStage ? 'LOCKED' : gameData.stages[i-1]}`;
+            if(i > Game.unlockedStage) b.disabled = true;
+            b.onclick = () => Game.introStage(i);
+            map.appendChild(b);
+        }
+        const cb = document.createElement('button'); cb.className = 'btn'; cb.style.gridColumn = 'span 2';
+        cb.innerHTML = Game.unlockedStage >= 5 ? '★ 我想對你說的話 ★' : '★ 鎖定中 ★';
+        cb.disabled = Game.unlockedStage < 5; cb.onclick = () => Game.showScreen('chest');
+        map.appendChild(cb);
+    },
+    showScreen: (id) => {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        const target = document.getElementById('screen-'+id);
+        if(target) target.classList.add('active');
+        if(id === 'map') Game.renderMap();
+    },
+    introStage: (n) => {
+        const descs = [
+            "這些都是我們一起經歷過的回憶，你不可能認不出來吧？", 
+            "請接住你喜歡的東西，避開你不喜歡的東西以及炸彈", 
+            "請依照我們曾經出現的Line對話內容，選出正確答案", 
+            "三個泡泡相連及消除，目標為清除所有泡泡。"
+        ];
+        document.getElementById('intro-title').innerText = `關卡 ${n}: ${gameData.stages[n-1]}`;
+        document.getElementById('intro-desc').innerText = descs[n-1];
+        document.getElementById('intro-start-btn').onclick = () => Game.loadStage(n);
+        Game.showScreen('intro');
+    },
+    loadStage: (n) => {
+        Game.showScreen('stage'+n);
+        if(n===1) Stage1.start(); if(n===2) Stage2.start(); if(n===3) Stage3.start(); if(n===4) Stage4.start();
+    },
+    completeStage: (n) => {
+        if(n >= Game.unlockedStage) { Game.unlockedStage = n+1; localStorage.setItem('treasure_hunt_progress', Game.unlockedStage); }
+        document.getElementById('clue-expression').innerText = gameData.puzzleClues[n-1].expression;
+        Game.showScreen('clue');
+    },
+    unlockChest: () => {
+        if(document.getElementById('final-pwd-input').value === gameData.finalChest.password) {
+            Game.showScreen('final'); 
+            Game.runFinalSequence();
+        } else UI.showMsg("你不會算數學嗎？"); // 更新錯誤訊息
+    },
+
+    finalPager: {
+        current: 0,
+        typingTimeout: null,
+        render: () => {
+            const area = document.getElementById('final-text-area');
+            const indicator = document.getElementById('page-indicator');
+            const total = gameData.finalChest.pages.length;
+            
+            // 重要：清除舊的計時器，防止快速點擊導致文字堆疊
+            if(Game.finalPager.typingTimeout) clearTimeout(Game.finalPager.typingTimeout);
+            
+            area.innerHTML = '';
+            const text = gameData.finalChest.pages[Game.finalPager.current];
+            let i = 0;
+            
+            function type() {
+                if(i < text.length) {
+                    area.innerHTML += text[i] === '\n' ? '<br>' : text[i];
+                    i++;
+                    Game.finalPager.typingTimeout = setTimeout(type, 30);
+                }
+            }
+            type();
+            
+            indicator.innerText = `${Game.finalPager.current + 1} / ${total}`;
+            document.getElementById('prev-page').disabled = (Game.finalPager.current === 0);
+            document.getElementById('next-page').disabled = (Game.finalPager.current === total - 1);
+        },
+        next: () => { if(Game.finalPager.current < gameData.finalChest.pages.length - 1) { Game.finalPager.current++; Game.finalPager.render(); } },
+        prev: () => { if(Game.finalPager.current > 0) { Game.finalPager.current--; Game.finalPager.render(); } }
+    },
+
+    runFinalSequence: () => {
+        const a = document.getElementById('audio-bgm'); a.src = gameData.finalChest.bgm; a.play().catch(()=>{});
+        Game.finalPager.current = 0;
+        Game.finalPager.render();
+    }
+};
+
+/** 關卡邏輯 1-3 (保持不變) **/
+const Stage1 = {
+    idx: 0, start: () => { Stage1.idx = 0; Stage1.load(); },
+    load: () => {
+        const q = gameData.stage1[Stage1.idx], bi = document.getElementById('mag-img-blur'), l = document.getElementById('mag-lens');
+        bi.src = q.image; l.style.backgroundImage = "url('" + q.image + "')"; l.style.display = 'none';
+        const opt = document.getElementById('stage1-options'); opt.innerHTML = '';
+        q.options.forEach(o => {
+            const b = document.createElement('button'); b.className = 'btn'; b.innerText = o;
+            b.onclick = () => { if(o === q.answer) { Stage1.idx++; if(Stage1.idx >= gameData.stage1.length) Game.completeStage(1); else Stage1.load(); } 
+                else { UI.showMsg("操你媽這都答不出來？", "射了"); Stage1.load(); } };
+            opt.appendChild(b);
+        });
+    },
+    handleMove: (e) => { const c = document.getElementById('magnifier-canvas-container'), r = c.getBoundingClientRect(); Stage1.updateLens(e.clientX - r.left, e.clientY - r.top); },
+    handleTouch: (e) => { const c = document.getElementById('magnifier-canvas-container'), r = c.getBoundingClientRect(); Stage1.updateLens(e.touches[0].clientX - r.left, e.touches[0].clientY - r.top); },
+    updateLens: (x, y) => {
+        const l = document.getElementById('mag-lens'), c = document.getElementById('magnifier-canvas-container'); l.style.display = 'block';
+        l.style.left = (x - 60) + 'px'; l.style.top = (y - 60) + 'px';
+        l.style.backgroundPosition = ((x / c.offsetWidth) * 100) + "% " + ((y / c.offsetHeight) * 100) + "%";
+        l.style.backgroundSize = (c.offsetWidth * 1.5) + "px " + (c.offsetHeight * 1.5) + "px";
+    }
+};
+
+const Stage2 = {
+    score: 0, time: 0, loop: null, timer: null, items: [], px: 150,
+    start: () => {
+        if(Stage2.loop) cancelAnimationFrame(Stage2.loop); if(Stage2.timer) clearInterval(Stage2.timer);
+        const catchArea = document.getElementById('catch-game-area');
+        catchArea.querySelectorAll('.falling-item').forEach(item => item.remove());
+        Stage2.score = 0; Stage2.time = gameData.stage2.duration; Stage2.items = [];
+        document.getElementById('s2-score').innerText = '0'; document.getElementById('s2-target').innerText = gameData.stage2.targetScore;
+        catchArea.onmousemove = (e) => { Stage2.px = e.clientX - catchArea.getBoundingClientRect().left - 40; document.getElementById('player-basket').style.left = Stage2.px + 'px'; };
+        catchArea.ontouchmove = (e) => { Stage2.px = e.touches[0].clientX - catchArea.getBoundingClientRect().left - 40; document.getElementById('player-basket').style.left = Stage2.px + 'px'; };
+        Stage2.timer = setInterval(() => { Stage2.time--; document.getElementById('s2-timer').innerText = Stage2.time; if(Stage2.time <= 0) Stage2.end(false, "沒拿到足夠分數！"); }, 1000);
+        Stage2.run();
+    },
+    run: () => {
+        if(Stage2.time <= 0) return;
+        if(Math.random() < 0.06) {
+            const r = Math.random(), el = document.createElement('div'); el.className = 'falling-item';
+            let type = 'liked', txt = '', s = gameData.stage2.speed;
+            if(r < 0.02) { type = 'instantWin'; txt = gameData.stage2.specialWinName; s *= 2.5; el.style.color = 'gold'; el.style.borderColor = 'gold'; }
+            else if(r < 0.12) { type = 'bomb'; txt = gameData.stage2.bombNames[Math.floor(Math.random()*gameData.stage2.bombNames.length)]; el.style.color = 'red'; el.style.borderColor = 'red'; }
+            else if(r < 0.4) { type = 'disliked'; txt = gameData.stage2.dislikedNames[Math.floor(Math.random()*gameData.stage2.dislikedNames.length)]; el.style.color = '#ff66ff'; el.style.borderColor = '#ff66ff'; }
+            else { type = 'liked'; txt = gameData.stage2.likedNames[Math.floor(Math.random()*gameData.stage2.likedNames.length)]; el.style.color = 'var(--primary-color)'; el.style.borderColor = 'var(--primary-color)'; }
+            el.innerText = txt; document.getElementById('catch-game-area').appendChild(el);
+            Stage2.items.push({ el, x: Math.random() * (document.getElementById('catch-game-area').offsetWidth - 80), y: -30, type, speed: s });
+        }
+        for(let i = Stage2.items.length-1; i >= 0; i--) {
+            const it = Stage2.items[i]; it.y += it.speed; it.el.style.top = it.y+'px'; it.el.style.left = it.x+'px';
+            if(it.y > 320 && it.y < 350 && it.x > Stage2.px-20 && it.x < Stage2.px+80) {
+                if(it.type === 'instantWin') { UI.showMsg("接到了可婕！直接通關！"); Stage2.end(true); return; }
+                else if(it.type === 'liked') Stage2.score += gameData.stage2.scoreLiked;
+                else if(it.type === 'disliked') Stage2.score += gameData.stage2.scoreDisliked;
+                else { Stage2.end(false, "踩到" + it.el.innerText + "炸彈了！", "女人真可怕"); return; }
+                document.getElementById('s2-score').innerText = Stage2.score; it.el.remove(); Stage2.items.splice(i, 1);
+                if(Stage2.score >= gameData.stage2.targetScore) { Stage2.end(true); return; }
+            } else if(it.y > 360) { it.el.remove(); Stage2.items.splice(i, 1); }
+        }
+        Stage2.loop = requestAnimationFrame(Stage2.run);
+    },
+    end: (s, m, bt = "確定") => { clearInterval(Stage2.timer); cancelAnimationFrame(Stage2.loop); if(s) Game.completeStage(2); else { UI.showMsg(m, bt); Game.showScreen('map'); } }
+};
+
+const Stage3 = {
+    idx: 0, start: () => { Stage3.idx = 0; document.getElementById('chat-box').innerHTML = ''; Stage3.load(); },
+    load: async () => {
+        const q = gameData.stage3[Stage3.idx], box = document.getElementById('chat-box'), opt = document.getElementById('stage3-options');
+        box.innerHTML = ''; opt.innerHTML = '';
+        for (const msg of q.setupMsgs) { await new Promise(r => setTimeout(r, 600)); Stage3.addMsg(msg.text, msg.side); }
+        q.options.forEach(o => {
+            const b = document.createElement('button'); b.className = 'btn'; b.innerText = o;
+            b.onclick = () => { Stage3.addMsg(o, 'me'); setTimeout(() => { if(o === q.correctAnswer) { Stage3.idx++; if(Stage3.idx >= gameData.stage3.length) Game.completeStage(3); else Stage3.load(); } 
+                else { UI.showMsg("請回去看看對話紀錄好嗎？", "對不起！"); Stage3.load(); } }, 600); };
+            opt.appendChild(b);
+        });
+    },
+    addMsg: (t, s) => { const box = document.getElementById('chat-box'); const m = document.createElement('div'); m.className = "msg msg-" + s; m.innerText = t; box.appendChild(m); box.scrollTop = box.scrollHeight; }
+};
+
+const Stage4 = {
+    grid: [], currentType: 0, nextType: 0, isShooting: false, projectile: null, loop: null, areaWidth: 0, areaHeight: 420, cols: 8, bubbleSize: 40,
+    start: () => {
+        const area = document.getElementById('bubble-area');
+        Stage4.areaWidth = area.clientWidth || 350; Stage4.cols = Math.floor(Stage4.areaWidth / Stage4.bubbleSize);
+        if(Stage4.loop) cancelAnimationFrame(Stage4.loop);
+        Stage4.grid.forEach(b => b.el.remove()); Stage4.grid = [];
+        if(Stage4.projectile) Stage4.projectile.el.remove(); Stage4.projectile = null; Stage4.isShooting = false;
+        for(let r=0; r<4; r++) { for(let c=0; c<Stage4.cols; c++) { if(Math.random() < 0.85) Stage4.spawnFixed(c, r, Math.floor(Math.random() * gameData.stage4.avatars.length)); } }
+        const available = Stage4.getAvailableTypes(); Stage4.nextType = available[Math.floor(Math.random() * available.length)]; Stage4.prepareNext();
+        area.onmousemove = Stage4.handleAim; area.onclick = Stage4.handleShoot; Stage4.loop = requestAnimationFrame(Stage4.update);
+    },
+    getAvailableTypes: () => { const types = new Set(Stage4.grid.map(b => b.type)); const available = Array.from(types); return available.length > 0 ? available : [0]; },
+    setBubbleStyle: (el, type) => { const url = gameData.stage4.avatars[type]; const img = new Image(); img.src = url; img.onload = () => { el.style.backgroundImage = "url('" + url + "')"; }; },
+    prepareNext: () => {
+        const available = Stage4.getAvailableTypes();
+        Stage4.currentType = available.includes(Stage4.nextType) ? Stage4.nextType : available[Math.floor(Math.random() * available.length)];
+        const cur = document.getElementById('current-bubble-display'); if(cur) Stage4.setBubbleStyle(cur, Stage4.currentType);
+        Stage4.nextType = available[Math.floor(Math.random() * available.length)];
+        const nxt = document.getElementById('next-bubble-preview'); if(nxt) Stage4.setBubbleStyle(nxt, Stage4.nextType);
+    },
+    spawnFixed: (col, row, type) => {
+        const ox = (row % 2 === 1 ? Stage4.bubbleSize/2 : 0), x = col * Stage4.bubbleSize + ox, y = row * (Stage4.bubbleSize - 5);
+        if(x + Stage4.bubbleSize > Stage4.areaWidth + 5) return;
+        const el = document.createElement('div'); el.className = 'bubble-node'; el.style.left = x + 'px'; el.style.top = y + 'px';
+        Stage4.setBubbleStyle(el, type); document.getElementById('bubble-area').appendChild(el); Stage4.grid.push({ col, row, type, x, y, el });
+    },
+    handleAim: (e) => {
+        const rect = document.getElementById('bubble-area').getBoundingClientRect();
+        const angle = Math.atan2((e.clientY - rect.top) - (Stage4.areaHeight - 40), (e.clientX - rect.left) - (Stage4.areaWidth / 2));
+        document.getElementById('cannon-wrapper').style.transform = "rotate(" + (angle + Math.PI/2) + "rad)";
+    },
+    handleShoot: (e) => {
+        if(Stage4.isShooting) return;
+        const sx = Stage4.areaWidth / 2 - 20, sy = Stage4.areaHeight - 80;
+        const wrapper = document.getElementById('cannon-wrapper');
+        const angleStr = wrapper.style.transform;
+        const angle = angleStr ? parseFloat(angleStr.replace('rotate(', '').replace('rad)', '')) - Math.PI/2 : -Math.PI/2;
+        const el = document.createElement('div'); el.className = 'bubble-node bubble-shooting';
+        el.style.left = sx + 'px'; el.style.top = sy + 'px'; Stage4.setBubbleStyle(el, Stage4.currentType); document.getElementById('bubble-area').appendChild(el);
+        Stage4.projectile = { el, x: sx, y: sy, vx: Math.cos(angle) * 10, vy: Math.sin(angle) * 10, type: Stage4.currentType }; Stage4.isShooting = true;
+    },
+    update: () => {
+        if(Stage4.isShooting && Stage4.projectile) {
+            const p = Stage4.projectile; p.x += p.vx; p.y += p.vy;
+            if(p.x <= 0 || p.x >= Stage4.areaWidth - Stage4.bubbleSize) p.vx *= -1;
+            p.el.style.left = p.x + 'px'; p.el.style.top = p.y + 'px';
+            let hit = false; if(p.y <= 0) hit = true; else { for(let b of Stage4.grid) { if(Math.sqrt(Math.pow((p.x+20)-(b.x+20),2)+Math.pow((p.y+20)-(b.y+20),2)) < Stage4.bubbleSize*0.85) { hit = true; break; } } }
+            if(hit) Stage4.snapAndCheck(p); else if(p.y > Stage4.areaHeight || p.y < -50) { p.el.remove(); Stage4.projectile = null; Stage4.isShooting = false; Stage4.prepareNext(); }
+        }
+        Stage4.loop = requestAnimationFrame(Stage4.update);
+    },
+    snapAndCheck: (p) => {
+        const r = Math.round(p.y / (Stage4.bubbleSize - 5)), ox = (r % 2 === 1 ? Stage4.bubbleSize/2 : 0), c = Math.round((p.x - ox) / Stage4.bubbleSize);
+        const fx = c * Stage4.bubbleSize + ox, fy = r * (Stage4.bubbleSize - 5);
+        p.el.classList.remove('bubble-shooting'); p.el.style.left = fx + 'px'; p.el.style.top = fy + 'px';
+        const node = { col: c, row: r, type: p.type, x: fx, y: fy, el: p.el }; Stage4.grid.push(node); Stage4.projectile = null; Stage4.isShooting = false;
+        if(r >= 8) { if(Stage4.loop) cancelAnimationFrame(Stage4.loop); Stage4.loop = null; UI.showMsg("射到滿出來了", "確定"); Game.showScreen('map'); return; }
+        const matches = Stage4.findMatches(node); if(matches.length >= 3) {
+            matches.forEach(m => { m.el.style.transform = 'scale(0)'; setTimeout(() => m.el.remove(), 200); Stage4.grid = Stage4.grid.filter(x => x !== m); });
+            setTimeout(() => Stage4.checkFloatingBubbles(), 250);
+        } else Stage4.prepareNext();
+    },
+    findMatches: (node) => {
+        let found = [node], q = [node], v = new Set(); v.add(node.col + "," + node.row);
+        while(q.length > 0) {
+            const curr = q.shift();
+            const neighbors = Stage4.grid.filter(b => {
+                if(v.has(b.col + "," + b.row) || b.type !== node.type) return false;
+                return Math.sqrt(Math.pow(b.x-curr.x,2)+Math.pow(b.y-curr.y,2)) < Stage4.bubbleSize*1.2;
+            });
+            neighbors.forEach(n => { v.add(n.col + "," + n.row); found.push(n); q.push(n); });
+        }
+        return found;
+    },
+    checkFloatingBubbles: () => {
+        const conn = new Set(), q = Stage4.grid.filter(b => b.row === 0); q.forEach(b => conn.add(b));
+        let i = 0; while(i < q.length) {
+            const curr = q[i++];
+            const neighbors = Stage4.grid.filter(b => !conn.has(b) && Math.sqrt(Math.pow(b.x-curr.x,2)+Math.pow(b.y-curr.y,2)) < Stage4.bubbleSize*1.2);
+            neighbors.forEach(n => { conn.add(n); q.push(n); });
+        }
+        const floating = Stage4.grid.filter(b => !conn.has(b));
+        floating.forEach(f => {
+            f.el.classList.add('bubble-falling'); f.el.style.top = (f.y + 400) + 'px'; f.el.style.opacity = '0';
+            Stage4.grid = Stage4.grid.filter(x => x !== f); setTimeout(() => f.el.remove(), 600);
+        });
+        if(Stage4.grid.length === 0) setTimeout(() => Game.completeStage(4), 800); else Stage4.prepareNext();
+    }
+};
+
+window.onload = Game.init;
+</script>
+</body>
+</html>
